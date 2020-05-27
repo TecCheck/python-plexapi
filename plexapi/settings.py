@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 from collections import defaultdict
+from urllib.parse import quote
 
 from plexapi import log, utils
 from plexapi.base import PlexObject
-from plexapi.compat import quote, string_type
 from plexapi.exceptions import BadRequest, NotFound
 
 
@@ -106,7 +106,7 @@ class Setting(PlexObject):
         'bool': {'type': bool, 'cast': _bool_cast, 'tostr': _bool_str},
         'double': {'type': float, 'cast': float, 'tostr': _str},
         'int': {'type': int, 'cast': int, 'tostr': _str},
-        'text': {'type': string_type, 'cast': _str, 'tostr': _str},
+        'text': {'type': str, 'cast': _str, 'tostr': _str},
     }
 
     def _loadData(self, data):
@@ -124,8 +124,8 @@ class Setting(PlexObject):
         self.enumValues = self._getEnumValues(data)
 
     def _cast(self, value):
-        """ Cast the specifief value to the type of this setting. """
-        if self.type != 'text':
+        """ Cast the specific value to the type of this setting. """
+        if self.type != 'enum':
             value = utils.cast(self.TYPES.get(self.type)['cast'], value)
         return value
 
