@@ -636,22 +636,70 @@ class Playable(object):
         mvb = params.get('maxVideoBitrate')
         vr = params.get('videoResolution', '')
         params = {
+            "hasMDE": "1",
             'path': self.key,
             'offset': params.get('offset', 0),
             'copyts': params.get('copyts', 1),
-            'protocol': params.get('protocol'),
+            'session': params.get('session', None),
+            'protocol': params.get('protocol', "hls"),
             'mediaIndex': params.get('mediaIndex', 0),
+            "partIndex": params.get('partIndex', 0),
+            "location": params.get('location', "lan"),
             'X-Plex-Platform': params.get('platform', 'Chrome'),
             'maxVideoBitrate': max(mvb, 64) if mvb else None,
-            'videoResolution': vr if re.match('^\d+x\d+$', vr) else None
+            'videoResolution': vr if re.match('^\d+x\d+$', vr) else None,
+            "directStreamAudio":  "1",
+            "subtitles": "burn",
+            "subtitleSize": 100,
+            "autoAdjustQuality": "0",
+            "directPlay": "0",
+            "directStream": "1",
+            "fastSeek": "1",
         }
         # remove None values
         params = {k: v for k, v in params.items() if v is not None}
         streamtype = 'audio' if self.TYPE in ('track', 'album') else 'video'
         # sort the keys since the randomness fucks with my tests..
         sorted_params = sorted(params.items(), key=lambda val: val[0])
-        return self._server.url('/%s/:/transcode/universal/start.m3u8?%s' %
-            (streamtype, urlencode(sorted_params)), includeToken=True)
+        return self._server.url('/%s/:/transcode/universal/start.%s?%s' %
+            (streamtype, params.get('fileExtension', 'mpd'), urlencode(sorted_params)), includeToken=True)
+
+    def getDecision(self, session, **params):
+        mvb = params.get('maxVideoBitrate')
+        vr = params.get('videoResolution', '')
+        params = {
+            "hasMDE":             "1",
+            "path":               self.key,
+            "session":            session,
+            "protocol":           params.get('protocol', "hls"),
+            "directPlay":         "0",
+            "directStream":       "1",
+            "fastSeek":           "1",
+            "mediaIndex":         params.get('mediaIndex', 0),
+            "partIndex":          params.get('partIndex', 0),
+            "location":           params.get('location', "lan"),
+            "autoAdjustQuality":  "0",
+            "directStreamAudio":  "1",
+            "subtitles":          "burn", # Set to none first.
+            "subtitleSize":       100,
+            "copyts":             "1",
+            "maxVideoBitrate":    max(mvb, 64) if mvb else None,
+            'videoResolution': vr if re.match('^\d+x\d+$', vr) else None,
+            "audioBoost":     100,
+            'X-Plex-Platform': params.get('platform', 'Chrome'),
+        }
+        # remove None values
+        params = {k: v for k, v in params.items() if v is not None}
+        streamtype = 'audio' if self.TYPE in ('track', 'album') else 'video'
+        sorted_params = sorted(params.items(), key=lambda val: val[0])
+        return self._server.query('/%s/:/transcode/universal/decision?%s' % (streamtype, urlencode(sorted_params)))
+
+    def pingSession(self, session):
+        params = {
+            "session": session,
+        }
+        streamtype = 'audio' if self.TYPE in ('track', 'album') else 'video'
+        return self._server.query('/%s/:/transcode/universal/ping?%s' % (streamtype, urlencode(params)))
 
     def getStream(self, streamId):
         """ Return stream. """
@@ -789,7 +837,7 @@ class Playable(object):
         self._server.query(key)
         self.reload()
         
-    def updateTimeline(self, time, state='stopped', duration=None, playQueueItemID=None):
+    def updateTimeline(self, time, state='stopped', duration=None, playQueueItemID=None, session=None):
         """ Set the timeline progress for this video.
 
             Parameters:
@@ -806,8 +854,11 @@ class Playable(object):
         playQueuItemIdStr = ''
         if playQueueItemID is not None:
             playQueuItemIdStr = '&playQueueItemID=' + playQueueItemID
-        key = '/:/timeline?ratingKey=%s&key=%s&identifier=com.plexapp.plugins.library&time=%d&state=%s%s%s'
-        key %= (self.ratingKey, self.key, time, state, durationStr, playQueuItemIdStr)
+        sessionStr = ''
+        if session is not None:
+            sessionStr = 'X-Plex-Provider-Version=5.1&X-Plex-Session-Identifier=' + session
+        key = '/:/timeline?ratingKey=%s&key=%s&identifier=com.plexapp.plugins.library&time=%d&state=%s%s%s%s'
+        key %= (self.ratingKey, self.key, time, state, durationStr, playQueuItemIdStr, sessionStr)
         self._server.query(key)
         self.reload()
 
